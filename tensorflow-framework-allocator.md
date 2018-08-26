@@ -1,12 +1,19 @@
 ## 目录
-1. core/framework
-    1. resource
-    2. allocator
+1. 核心概念
+2. allocator
+    1. Allocator
+    2. AllocatorAttributes
+    3. AllocationAttributes
+    4. AllocatorWrapper
+    5. AllocatorStats
+3. allocator_registry
+    1. AllocatorRegistry
 
-## 核心概念
-给出的只是内存分配器的接口，没有给出具体实现。
+## 1. 核心概念
+allocator给出的只是内存分配器的接口，没有给出具体实现。allocator_registry用单例模式实现了一个全局的内存分配器注册类，负责管理和注册所有的内存分配器。
 
-## Allocator
+## 2. allocator
+### 2.1 Allocator
 Allocator是一个内存分配器的接口类，它规定了一个内存分配器需要具有哪些API。具体看代码：
 ```
 class Allocator {
@@ -41,7 +48,7 @@ private:
 }
 ```
 
-## AllocatorAttributes
+### 2.2 AllocatorAttributes
 不同的设备分配内存的方法并不相同，那是不是各设备只需要实现自身的内存分配器就可以了呢？如果在计算中每个设备只需要用到自己的内存，当然是没有问题的，但在TF中，有些情况下为了效率，GPU也需要用到CPU内存，比如，为了使用DMA给某些设备传送数据，我们仍然需要申请CPU内存。因此，当我们向一个设备索要内存分配器时，需要给它提供一些信息，告诉设备我们想要申请哪种类型的内存，这些信息就存储在AllocatorAttributes类中。
 ```
 struct AllocatorAttributes {
@@ -59,7 +66,7 @@ struct AllocatorAttributes {
 }
 ```
 
-## AllocationAttributes
+### 2.3 AllocationAttributes
 AllocatorAttributes很容易与另外一个类混淆，那就是AllocationAttributes。后者是为内存分配器的某一次具体的内存分配准备信息的，而前者是为向设备索要合适的内存分配器提供给设备的，使用时机完全不一样。
 ```
 class AllocationAttributes {
@@ -68,10 +75,10 @@ class AllocationAttributes {
 }
 ```
 
-## AllocatorWrapper
+### 2.4 AllocatorWrapper
 有时候我们想对某个内存分配器进行封装，以便在某个API上实现定制化。这时就需要用到AllocatorWrapper类，它本质上就是对Allocator类的直接封装。
 
-## AllocatorStats
+### 2.5 AllocatorStats
 为了对某个内存分配器已分配的内存进行统计，TF还设计了一个结构，AllocatorStats。
 ```
 struct AllocatorStats {
@@ -83,3 +90,24 @@ struct AllocatorStats {
     //...
 }
 ```
+
+## 3. allocator_registry
+### 3.1 AllocatorRegistry
+先看一下，注册器内部是怎样存储内存分配器的：
+```
+class AllocatorRegistry {
+    //...
+private:
+    std::vector<AllocatorRegistryEntry> allocators_;
+    //...
+}
+```
+其实就是把内存分配器存储在一个向量里，但并不是直接存储内存分配器本身，而是对它的一个封装，我们看下这个封装的结构：
+```
+typedef struct {
+    string name;
+    int priority;
+    Allocator* allocator;
+} AllocatorRegistryEntry;
+```
+除了内存分配器之外，这个entry里还存放了内存分配器的名称和优先级。当我们向AllocatorRegistry请求一个内存分配器时，它返回的是具有最高优先级的分配器，如果多个分配器有相同的优先级，就返回其中的一个。
