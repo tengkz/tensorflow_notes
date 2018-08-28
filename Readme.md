@@ -1,1 +1,12 @@
-Notes on tensorflow source code.
+# 目录
+1. framework
+    1. resource
+    2. allocator
+    3. tensor
+    4. op
+    5. node
+    6. kernel
+    7. graph
+    8. device
+    9. function
+2. common_runtime
