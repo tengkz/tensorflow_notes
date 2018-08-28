@@ -63,6 +63,7 @@ class OpKernel {
 - 在构造函数中，我们发现它需要的是一个OpKernelConstruction指针，我们猜想，这个指针应该包含了构建一个OpKernel所必须的数据成员和功能函数。另外，在核心API Compute中，接收的是一个OpKernelContext指针的参数，我们猜想，这个指针应该包含了OpKernel执行实际计算所需要的数据成员和功能函数。这两个类具体我们会在下面介绍。
 - 除此之外，我们还发现了一个指向NodeDef的指针。不是说OpKernel是对抽象的op的具体实现嘛？为什么这个实现还会跟具体的NodeDef相关呢？我们会在之后的剖析中解释这个问题。
 - kernel可以被分为同步kernel和异步kernel两类，大部分的kernel都应该是同步的，Compute函数在计算结束后返回结果状态，但有时为了限制使用的线程数，会将某些kernel设计为异步的，比如网络数据接收操作，如果这个操作被设计成同步，那么如果有其它线程在使用同一个网络接收服务，当前线程就会被阻塞，从而造成资源的浪费。
+
 刚才讲到了异步kernel，现在我们就来看一下异步kernel对应的类，AsyncOpKernel：
 ```
 class AsyncOpKernel : public OpKernel {
@@ -73,6 +74,7 @@ class AsyncOpKernel : public OpKernel {
 };
 ```
 可见，异步计算的API除了context之外，还需要提供一个回调函数，在异步计算执行结束之后调用。
+
 ### 3.2 OpKernelConstruction
 刚才我们提到，OpKernel的构造函数中，需要一个类型为OpKernelConstruction指针的参数，并且猜想这个参数包含了OpKernel构建所必须的数据成员和功能函数，实际上也确实如此，我们先来看下这个类的结构：
 ```
@@ -100,6 +102,7 @@ class OpKernelConstruction {
 - 关于临时内存和可复用内存。在OpKernel构建的过程中，我们可能需要分配一些内存，有些内存时临时性的，在OpKernel构建结束之后就没用了，我们会自主进行申请和释放。另外，我们也希望有些内存是可以在OpKernel的多次执行之间共享的，比如，有些kernel是有状态的，例如Variable，我们必须在kernel构建时就给这些内容申请内存。
 - 关于可复用内存，还有一点需要说明。对于在GPU上申请的可复用内存，由于GPU不像CPU那样内存方便管理，因此运行时需要对每一份内存的使用情况了如指掌，因此对于可复用的内存，我们必须对其每一次使用都了解。TF为此专门设计了一个PersistentTensor类，这个类是对Tensor的封装，但对于内部张量数据只能通过一个AccessData的接口来访问，只要我们在这个接口里设置一个Watcher，就能监控所有可复用内存的使用了。关于PersistentTensor下文会有详细说明。
 - 私有数据中还有一个FunctionLibraryRuntime结构的指针，顾名思义，这个结构表示一个运行时的函数库，我们将在下文中详细描述。
+
 ### 3.3 OpKernelContext
 还记得我们刚才提到，OpKernel的核心API Compute函数，需要一个类型为OpKernelContext指针的输入参数吗？刚才我们猜想，这个类包含了执行kernel计算所需要的数据成员和功能函数，实际上也确实如此。友情提示，在接下来看这个类的结构之前，请先去泡杯咖啡或者沏壶茶，因为这个类的结构确实很复杂。
 ```
