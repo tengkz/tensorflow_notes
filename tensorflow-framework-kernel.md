@@ -223,3 +223,33 @@ static KernelRegistry* GlobalKernelRegistryTyped() {
 }
 ```
 通过把GlobalKernelRegistryTyped函数定义为static，使得它返回的数据唯一，因此我们也就得到了一个全局的KernelRegistry作为OpKernel的注册中心。至于KernelRegistration的结构，比较简单，还是留给读者自己去探寻吧。
+
+## 4. op_segment
+有时候我们会为每个会话（Session）准备专用的kernel，因此就需要一个结构来管理每个会话的OpKernel，于是有了OpSegment类，我们看下它的结构：
+```
+class OpSegment {
+  public:
+    void AddHold(const string& session_handle);
+    void RemoveHold(const string& session_handle);
+    typedef std::function<Status(OpKernel**)> CreateKernelFn;
+    Status FindOrCreate(const string& session_handle, const string& node_name, OpKernel** kernel, CreateKernelFn create_fn);
+  private:
+    typedef std::unordered_map<string, OpKernel*> KernelMap;
+    struct Item {
+        int num_holds = 1;
+        KernelMap name_kernel;
+        ~Item();
+    };
+    typedef std::unordered_map<string, Item*> SessionMap;
+    mutalbe mutex mu_;
+    SessionMap session_ GUARDED_BY(mu_);
+    //...
+};
+```
+可见，这个OpSegment类，本质上是一个SessionMap，它本质上是一个SessionHandle到Item结构体的映射，而后者又是op名称到OpKernel结构的映射。我们可以用下面的图来表示：
+```
+graph LR
+SessionHandle-->Item
+op_name-->OpKernel
+```
+我们看到在Item结构中，有一个num_holds成员，它表示有多少hold指向了某个SessionHandle，hold的作用可以理解为引用计数，防止Session被删掉。向一个SessionHandle添加hold就是为了防止SessionHandle对应的OpKernel被删除。
