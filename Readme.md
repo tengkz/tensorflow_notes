@@ -9,4 +9,9 @@
     7. graph
     8. device
     9. function
+    10. shapeinference
 2. common_runtime
+    1. device
+    2. session
+    3. graph_optimizer
+    4. executor
