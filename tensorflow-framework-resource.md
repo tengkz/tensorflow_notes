@@ -24,9 +24,9 @@ public:
 普通节点是无法直接使用共享资源的，必须通过一种包含了ResourceOpKernel的特殊节点（关于OpKernel的详细定义，请参见[Kernel](https://www.cnblogs.com/jicanghai/p/9545674.html)，目前仅需要知道，这是节点中用于实际执行计算的类就好了），这种节点帮助普通节点在资源管理器中查找或创建某种特定类型的资源，如图所示：
 ```
 graph LR
-    A(OpKernel) -->|继承自| B(ResourceOpKernel)
+    A(OpKernel) -->|派生| B(ResourceOpKernel)
     B(ResourceOpKernel) -->|创建或查找| C(Resource)
-    A(OpKernel) -->|继承自| D(NormalOpKernel)
+    A(OpKernel) -->|派生| D(NormalOpKernel)
     D(NormalOpKernel) -->|使用资源| B(ResourceOpKernel)
 ```
 ResourceOpKernel类的定义如下（仅保留接口）：
