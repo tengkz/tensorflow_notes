@@ -180,3 +180,5 @@ graph TB
 # 8. 迭代记录
 - v1.0 2018-08-25 文档创建
 - v2.0 2018-09-08 文档重构
+
+[github地址](https://github.com/tengkz/tensorflow_notes)
