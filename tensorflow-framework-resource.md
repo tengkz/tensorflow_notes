@@ -25,7 +25,7 @@ message ResourceHandleProto {
 
 ## resource_mgr
 系统中的大量资源需要被高效的管理，这些资源类型繁多，用处又各有不同，因此TF提出了包含容器的资源管理类——ResourceMgr。三者的关系如下：
-```
+```mermaid
 graph LR
 ResourceMgr-->Container
 Container-->Resource
