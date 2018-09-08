@@ -1,51 +1,16 @@
-## 目录
-1. core/framwork
-    1. resource
+# 目录
+1. 什么是resource
+2. 如何使用resource
+3. 如何管理resource
+4. 常用resource
+5. 其它结构
+6. 关系图
+7. 涉及的文件
+8. 迭代记录
 
-## 核心概念
-资源大多数情况下指的是内存，首先我们来看下相关的序列化结构，ResourceHandleProto
-```
-message ResourceHandleProto {
-    //包含该资源的设备唯一名称
-    string device = 1;
-    //包含该资源的容器名称
-    string container = 2;
-    //该资源的唯一名称
-    string name = 3;
-    //该资源所属类型的唯一哈希值，仅在当前设备和当前执行中有效
-    uint64 hash_code = 4;
-    //如果可以获取的话，表示当前句柄指向资源的类型，仅调试使用
-    string maybe_type_name = 5;
-}
-```
-简单来说，这是一个资源的句柄，它包含了描述这个资源的位置、属性的关键信息。
-
-## resource_handle
-细看一下resource_handle.h，就会发现其中的ResrouceHandle类根本就是前面proto的C++实现。之所以要单独再实现一个C++版本的资源句柄，是为了避免让kernels依赖于protos。
-
-## resource_mgr
-系统中的大量资源需要被高效的管理，这些资源类型繁多，用处又各有不同，因此TF提出了包含容器的资源管理类——ResourceMgr。三者的关系如下：
-```mermaid
-graph LR
-ResourceMgr-->Container
-Container-->Resource
-```
-看看ResourceMgr类中都包含了哪些私有数据成员：
-```
-class ResourceMgr {
-    //...
-private:
-    //...
-    typedef std::pair<uint64,string> Key;
-    typedef std::unordered_map<Key,ResourceBase*,KeyHash,KeyEqual> Container;
-    const string default_container_;
-    mutable mutext mu_;
-    std::unordered_map<string,Container*> containers_ GUARDED_BY(mu_);
-    std::unordered_map<uint64,string> debug_type_names GUARDED_BY(mu_);
-}
-```
-其中，容器Container本质上是一个映射，从Key到ResourceBase*的映射，前者包含资源类型的哈希值（想想ResourceHandleProto中的hash_code字段）和资源的名称，而后者就是所有资源的基类对象的指针，这个基类对象我们后面会讲到。资源管理器中最核心的私有数据是containers_，它也是一个映射，把容器的名称映射为容器指针。通过这样一个两层的映射，TF实现了资源管理的功能。
-刚才提到了ResourceBase类，我们看一下它的实现：
+# 1. 什么是resource
+我们知道，TF的计算是由设备完成的。每个设备包含若干个节点，由这些节点完成实际的计算。有些时候，我们需要在不同的节点之间，共享一些内容，比如，张量值，kv存储表，队列，读取器等等，这些被同设备上的节点共享的内容，就是资源。
+所有的资源类都继承自一个基类，ResourceBase，下面看下它的实现：
 ```
 class ResourceBase : public core::RefCounted {
 public:
@@ -53,8 +18,59 @@ public:
     virtual int64 MemoryUsed() const {return 0;};
 };
 ```
-因此，ResourceBase徒有其名，本质上只是一个提供了引用计数功能的对象。资源的使用一定要慎之又慎，提供引用计数功能也是为了方便对资源做回收。
-再回到ResourceMgr类，为了透彻理解它的功能，我们再看下它包含的主要接口：
+它继承自`core::RefCounted`，也就是说，资源本身拥有引用计数的功能。这是为了方便对资源的使用进行监控，在资源无用后能够及时将它释放掉。
+
+# 2. 如何使用resource
+普通节点是无法直接使用共享资源的，必须通过一种包含了ResourceOpKernel的特殊节点（关于OpKernel的详细定义，请参见[Kernel](https://www.cnblogs.com/jicanghai/p/9545674.html)，目前仅需要知道，这是节点中用于实际执行计算的类就好了），这种节点帮助普通节点在资源管理器中查找或创建某种特定类型的资源，如图所示：
+```
+graph LR
+    A(OpKernel) -->|继承自| B(ResourceOpKernel)
+    B(ResourceOpKernel) -->|创建或查找| C(Resource)
+    A(OpKernel) -->|继承自| D(NormalOpKernel)
+    D(NormalOpKernel) -->|使用资源| B(ResourceOpKernel)
+```
+ResourceOpKernel类的定义如下（仅保留接口）：
+```
+template <typename T>
+class ResourceOpKernel : public OpKernel {
+  public:
+    //...
+    void Compute(OpKernelContext* context) override LOCKS_EXCLUDED(mu_);
+  protected:
+    mutex mu_;
+    ContainerInfo cinfo_ GUARDED_BY(mu_);//包含了对资源的要求
+    T* resource_ GUARDED_BY(mu_) = nullptr;
+  private:
+    virtual Status CreateResource(T** resource) EXECLUSIVE_LOCKS_REQUIRED(mu_) = 0;//返回一个T派生类的资源对象，这个对象归当前的ResourceOpKernel对象所有
+    virtual Status VerifyResource(T* resource);//校验resource是否是当前对象需要的类型
+    PersistentTensor handle_ GUARDED_BY(mu_);
+}
+```
+其中的Compute函数，在首次调用时，会根据cinfo_中包含的对资源的要求，从资源管理器中查找，或者创建一个新的资源。
+这里牵扯到两个新的概念，一个是ContainerInfo，一个是资源管理器。我们将在下文中讨论。
+
+# 3. 如何管理resource
+最简单的，可以在设备内维护一个资源名称到资源实体的映射，但这种管理方式过于粗糙，TF使用容器的概念实现了对资源的分组，下面看一下对容器的定义：
+```
+typedef std::pair<uint64,string> Key;
+typedef std::unordered_map<Key,ResourceBase*,KeyHash,KeyEqual> Container;
+```
+其中，Key是对资源的描述，uint64代表资源类型的哈希值，string代表了资源的名称，而Container本质上就是一个资源描述到资源指针的映射。
+为了对同一个设备上的资源提供统一的管理入口，TF定义了ResourceMgr类，其私有数据成员如下：
+```
+class ResourceMgr {
+  private:
+    //当前设备上的默认容器名称，如果查找时没有指定容器，则在默认容器中查找
+    const string default_container_;
+    mutable mutext mu_;
+    //容器名称到容器指针的映射
+    std::unordered_map<string,Container*> containers_ GUARDED_BY(mu_);
+    //资源类型的哈希值到资源类型名称的映射
+    std::unordered_map<uint64,string> debug_type_names GUARDED_BY(mu_);
+};
+```
+
+资源管理类的公共接口如下：
 ```
 class ResourceMgr {
 public:
@@ -72,45 +88,95 @@ public:
     Status Cleanup(const string& container);
     //删除所有容器中的所有资源
     void Clear();
-}
+};
 ```
-有意思的是，ResourceMgr包含了两个Delete函数，其中一个以容器名称和资源名称为参数，另一个以ResourceHandle为参数，这里资源句柄的作用就很明显了，它可以方便的指代一个资源的位置。
-为了更方便的使用ResourceHandle，TF还提供了很多辅助函数，为了节省篇幅，仅列出函数名：
-```
-//产生ResourceHandle
-MakeResourceHandle
-MakeResourceHandleToOutput
-MakePerStepResourceHandle
-HandleFromInput
-//根据ResourceHandle查找或构造资源
-CreateResource
-LookupResource
-LookupOrCreateResource
-DeleteResource
-```
-说了这么多，resource到底是什么呢？在TF中，有些kernel是带状态的，在某次执行完成后，它需要保存一些状态信息，方便下次执行的时候时候。这些状态信息就是resource的一种，为了方便管理这些状态信息，才构造了资源相关的类。对于一个kernel来说，一个很自然的问题是，如果它需要将中间状态作为resource保存起来，它需要选择哪个container呢？如果不同kernel的临时状态被随机的存放在资源管理器中，很不方便，因此TF设计了一个类，专门用来辅助kernel，帮它找到一个合适的容器，这个类就是ContainerInfo：
+注释很清晰，这里就不再赘述了。
+刚才提到，为了让ResourceOpKernel类的对象能够找到对应的资源，它在内部包含了一个ContainerInfo的类，它的作用是，帮助一个有状态的OpKernel决定，它需要通过哪个container/shared_name组合来访问对应的资源，类的定义如下：
 ```
 class ContainerInfo {
-public:
+  public:
     Status Init(ResourceMgr* rmgr, const NodeDef& ndef, bool use_node_name_as_default);
-    //...
-private:
+  private:
     ResourceMgr* rmgr_ = nullptr;
     string container_;
     string name_;
     bool resource_is_private_to_kernel_ = false;
+};
+```
+其中，这个决策过程如下：
+- 如果这个NodeDef的属性中，包含了"container"，就使用这个容器名称，否则使用rmgr的默认容器；
+- 如果这个NodeDef的属性中，包含了"shared_name"，那么就以此作为资源的名称，否则，如果"use_node_name_as_default"为真，则使用节点名称作为资源名称，如果为假，则生成一个唯一标识作为资源名；
+
+可见，ContainerInfo本质上提供的是，**如何帮助节点找到资源的位置**，而不是**资源位置的静态描述**。为了方便指向资源，TF提出了资源句柄的概念，它的protobuf定义如下：
+```
+message ResourceHandleProto {
+    //资源所在设备
+    string device = 1;
+    //资源所在容器
+    string container = 2;
+    //资源名称
+    string name = 3;
+    //资源类型的哈希值
+    uint64 hash_code = 4;
+    //资源类型名称，仅调试用
+    string maybe_type_name = 5;
 }
 ```
-这个决定的具体过程是这样的：
-- 如果container参数非空，就使用它，否则使用资源管理器的默认container
-- 如果shared_name参数是非空的，就使用它，否则，如果use_node_name_as_default为真，这个kernel的节点名称被用作资源名称，否则，创建一个专属于当前进程的名称
-注意，这里的container和shared_name都是NodeDef的属性值。
-于是就有了如下这个，帮助kernel从ctx->resource_manager()中获取资源的函数：
+资源句柄提供了对于资源位置和属性的详细描述，通过句柄我们可以唯一定位到一个资源。由于这个资源句柄是可序列化的，因此我们可以方便的传递它。另外为了避免使kernel依赖于proto，TF还设计了一个与ResourceHandleProto拥有相同功能的类，ResourceHandle，详见源代码。
+
+# 4. 常用resource
+本篇的开头提到了，常用的资源包括张量值，kv存储表，队列，读取器等等，除了张量值之外，TF为后三者提供了应用的接口，如下：
 ```
-Status GetResourceFromContext(OpKernelContext* ctx, const string& input_name, T** resource);
+class LookupInterface : public ResourceBase;
+class QueueInterface : public ResourceBase;
+class ReaderInterface : public ResourceBase;
 ```
-另外，resource_mgr.h还包含了如下的内容：
-- 一个判断资源是否被初始化的OpKernel
-- 一个用来注册op的宏，这个op可以生成某种类型的资源句柄
-- 一个用于生成指定资源的句柄的类
-- 一个用于注册kernel的宏，这个kernel针对的是可以生成某种类型资源句柄的op
+其中
+- kv存储器接口LookupInterface提供了一个批量查找和插入kv存储器的接口，方便不同的计算节点之间共享kv数据；
+- 队列接口QueueInterface提供了入队、出队等接口，方便不同节点之间共享队列，这对于计算图的异步执行是非常重要的，读取器接口内部也用到了队列接口；
+- 读取器接口ReaderInterface是所有TF支持的文件读取器的统一接口。TF可以支持从不同格式的文件中读取数据，每一个文件读取器都是一种资源，都需要继承自ReaderInterface接口；
+
+其中，关于读取器接口，其实真正的读取器资源，并非直接继承自读取器接口，而是继承自它的一个派生类，ReaderBase，这个类为读取器接口的每一个API提供了一个默认的实现，它的派生类只要重写这些默认实现，就能完成对不同文件格式的读取。
+同时，为了方便获取读取器资源，TF还为ResourceOpKernel生成了一个专用于获取读取器接口的派生类ReaderOpKernel：
+```
+class ReaderOpKernel : public ResourceOpKernel<ReaderInterface>;
+```
+这个类用于查找或者创造读取器资源，而这些读取器资源需要派生自ReaderBase类。
+
+# 5. 其它结构
+为了方便对资源进行操作，TF除了设计ResourceOpKernel这个核之外，还设计了两种核，IsResourceInitialized和ResourceHandleOp，前者用于检查某个资源是否已经初始化，后者用于为某个资源生成资源句柄。具体定义可以查看源代码。
+
+# 6. 关系图
+```
+graph TB
+    A(core::RefCounted)-->|派生|B(ResourceBase)
+    B(ResourceBase)-->|派生|C(LookupInterface)
+    B(ResourceBase)-->|派生|D(QueueInterface)
+    B(ResourceBase)-->|派生|E(ReaderInterface)
+    E(ReaderInterface)-->|派生|F(ReaderBase)
+    F(ReaderBase)-->|派生|G(具体阅读器资源)
+    H(OpKernel)-->|派生|I(ResourceOpKernel)
+    I(ResourceOpKernel)-->|派生|J(ReaderOpKernel)
+    J(ReaderOpKernel)-.查找或创建.->G(具体阅读器资源)
+    H(OpKernel)-->|派生|K(IsResourceInitialized)
+    H(OpKernel)-->|派生|L(ResourceHandleOp)
+    L(ResourceHandleOp)-.生成.->M(ResourceHandle)
+    M(ResourceHandle)-.指向.->G(具体阅读器资源)
+    K(IsResourceInitialized)-.判断是否初始化.->G(具体阅读器资源)
+    I(ResourceOpKernel)-.拥有.->N(ContainerInfo)
+    N(ContainerInfo)-.定位.->G(具体阅读器资源)
+```
+
+# 7. 涉及的文件
+- resource_handle
+- resource_mgr
+- resource_op_kernel
+- lookup_interface
+- queue_interface
+- reader_interface
+- reader_base
+- reader_op_kernel
+
+# 8. 迭代记录
+- v1.0 2018-08-25 文档创建
+- v2.0 2018-09-08 文档重构
