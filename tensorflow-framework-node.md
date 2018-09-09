@@ -59,6 +59,11 @@ class NodeDefBuilder {
 ```mermaid
 graph LR
     NodeDefBuilder-->|构建|NodeDef
+    NodeDef-.包含.->节点名称name
+    NodeDef-.包含.->节点包含的操作名称op
+    NodeDef-.包含.->输入input
+    NodeDef-.包含.->节点所在设备名称device
+    NodeDef-.包含.->节点属性也是操作属性attr
 ```
 
 # 4. 涉及的文件

@@ -1,12 +1,15 @@
-## 目录
-1. 核心概念
-2. device_attributes
+# 目录
+1. 什么是设备
+2. 设备属性描述
 3. device_base
+4. 关系图
+5. 涉及的文件
+6. 迭代记录
 
-## 1. 核心概念
+# 1. 什么是设备
 “设备”是一个很容易引起混淆的概念，在TF中，设备device专指能够执行实际计算的计算设备，比如CPU，GPU，SYNC设备等等。因此，一定要跟机器的概念区分开，一台机器可以包含多个设备。
 
-## 2. device_attributes
+# 2. 设备属性描述
 对设备有了一个清晰的概念之后，我们看下TF为了描述设备属性准备的proto，DeviceAttributes：
 ```
 message DeviceAttributes {
@@ -20,7 +23,7 @@ message DeviceAttributes {
 ```
 关于其中locality字段的详细含义，笔者还没找到具体的应用，有知道的读者还请告知。
 
-## 3. device_base
+# 3. device_base
 DeviceAttributes只是对设备属性的一些简单描述，真正的设备基类是DeviceBase，我们来看一下它的结构：
 ```
 class DeviceBase {
@@ -58,4 +61,28 @@ class DeviceContext : public core::RefCounted {
 };
 ```
 它是一个基于引用计数的类，主要的API包含CPU和设备之间的张量拷贝。也就是说，任何一个GPU设备都包含了CPU张量与设备张量之间相互拷贝的API接口。
+
 到这里我们总结一下，DeviceBase针对CPU设备，包含了一个CPU的线程池，和一个eigen_cpu_device，而对于GPU设备，包含了一个GpuDeviceInfo，这个结构中除了包含GPU执行器、事件响应器之外，还包含了一个DeviceContext，这个结构中包含了CPU和GPU之间相互拷贝张量的API。
+
+# 4. 关系图
+```mermaid
+graph LR
+    DeviceBase-.包含.->CpuWorkerThreads
+    CpuWorkerThreads-.包含.->thread::ThreadPool
+    DeviceBase-.包含.->GpuDeviceInfo
+    GpuDeviceInfo-.包含.->DeviceContext
+    core::RefCounted-->|派生|DeviceContext
+    DeviceBase-.包含.->Eigen::ThreadPoolDevice
+    DeviceContext-.包含.->CopyCPUTensorToDevice
+    DeviceContext-.包含.->CopyDeviceTensorToCPU
+```
+
+# 5. 涉及的文件
+- device_attributes
+- device_base
+
+# 6. 迭代记录
+- v1.0 2018-08-28 文档创建
+- v2.0 2018-09-09 文档重构
+
+[github地址](https://github.com/tengkz/tensorflow_notes)
