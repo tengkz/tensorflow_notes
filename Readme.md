@@ -1,5 +1,5 @@
-ï»¿# æ–‡ç« ç´¢å¼•
-1. frameworkè§£æ
+# ÎÄÕÂË÷Òı
+## framework½âÎö
 - [resource](https://www.cnblogs.com/jicanghai/p/9535504.html)
 - [allocator](https://www.cnblogs.com/jicanghai/p/9535808.html)
 - [tensor](https://www.cnblogs.com/jicanghai/p/9537282.html)
@@ -10,18 +10,20 @@
 - [device](https://www.cnblogs.com/jicanghai/p/9547635.html)
 - [function](https://www.cnblogs.com/jicanghai/p/9551776.html)
 - [shape_inference](https://www.cnblogs.com/jicanghai/p/9552490.html)
-2. common_runtimeè§£æ
+- [Ê°ÒÅ](https://www.cnblogs.com/jicanghai/p/9638201.html)
+## common_runtime½âÎö
 - [device](https://www.cnblogs.com/jicanghai/p/9569187.html)
 - [session](https://www.cnblogs.com/jicanghai/p/9569294.html)
 - [graph_optimizer](https://www.cnblogs.com/jicanghai/p/9569938.html)
 - [executor-1](https://www.cnblogs.com/jicanghai/p/9572213.html)
 - [executor-2](https://www.cnblogs.com/jicanghai/p/9572217.html)
 - [direct_session](https://www.cnblogs.com/jicanghai/p/9589285.html)
+- [Ê°ÒÅ](https://www.cnblogs.com/jicanghai/p/9657367.html)
 
-# åè®°
-1. å…³äºèµ·æº
-é˜…è¯»tensorflowæºç æ—¶ï¼Œä¸ºäº†æ•¦ä¿ƒè‡ªå·±ä¸»åŠ¨æ€è€ƒï¼ŒæŠŠé˜…è¯»çš„ç¬”è®°æ•´ç†æˆäº†åšå®¢ï¼Œæ‹¿å‡ºæ¥è·Ÿå¤§å®¶åˆ†äº«ã€‚
-2. å…³äºè¿­ä»£
-æ–‡ç« éƒ½æ˜¯å·¥ä½œä¹‹ä½™å†™çš„ï¼Œæ¯”è¾ƒä»“ä¿ƒï¼Œéš¾å…ä¼šæœ‰æ€è€ƒä¸å…¨é¢çš„åœ°æ–¹ï¼Œå¤§å®¶å¦‚æœå‘ç°äº†é—®é¢˜è¿˜è¯·ä¸åèµæ•™ï¼Œæˆ‘ä¼šæŒç»­è¿­ä»£ã€‚ç›®å‰åªå†™äº†ä¸¤ä¸ªæˆ‘è§‰å¾—å¯¹ç†è§£tensorflowè¿è¡Œæœºç†æœ€é‡è¦çš„æ¨¡å—ï¼Œå…¶å®ƒå†…å®¹æ˜¯å¦ä¼šæ›´æ–°ï¼Œè¿˜ä¸èƒ½ç¡®å®šã€‚å¦å¤–æˆ‘ä¼šæŠŠåšå®¢å†…å®¹åŒæ­¥åˆ°githubä¸Š[tensorflow_notes](https://github.com/tengkz/tensorflow_notes)ï¼Œæ¬¢è¿ç»™æˆ‘ç‚¹æ˜Ÿæ˜Ÿã€‚
-3. å…³äºæˆ‘
-ç å†œï¼Œæ–¹å‘æ˜¯æœºå™¨å­¦ä¹ ï¼Œæ¬¢è¿äº¤æµï¼Œtengkz at gmail dot com
+# ºó¼Ç
+## ¹ØÓÚÆğÔ´
+ÔÄ¶ÁtensorflowÔ´ÂëÊ±£¬ÎªÁË¶Ø´Ù×Ô¼ºÖ÷¶¯Ë¼¿¼£¬°ÑÔÄ¶ÁµÄ±Ê¼ÇÕûÀí³ÉÁË²©¿Í£¬ÄÃ³öÀ´¸ú´ó¼Ò·ÖÏí¡£
+## ¹ØÓÚµü´ú
+ÎÄÕÂ¶¼ÊÇ¹¤×÷Ö®ÓàĞ´µÄ£¬±È½Ï²Ö´Ù£¬ÄÑÃâ»áÓĞË¼¿¼²»È«ÃæµÄµØ·½£¬´ó¼ÒÈç¹û·¢ÏÖÁËÎÊÌâ»¹Çë²»Áß´Í½Ì£¬ÎÒ»á³ÖĞøµü´ú¡£Ä¿Ç°Ö»Ğ´ÁËÁ½¸öÎÒ¾õµÃ¶ÔÀí½âtensorflowÔËĞĞ»úÀí×îÖØÒªµÄÄ£¿é£¬ÆäËüÄÚÈİÊÇ·ñ»á¸üĞÂ£¬»¹²»ÄÜÈ·¶¨¡£ÁíÍâÎÒ»á°Ñ²©¿ÍÄÚÈİÍ¬²½µ½githubÉÏ[tensorflow_notes](https://github.com/tengkz/tensorflow_notes)£¬»¶Ó­¸øÎÒµãĞÇĞÇ¡£
+## ¹ØÓÚÎÒ
+ÂëÅ©£¬·½ÏòÊÇ»úÆ÷Ñ§Ï°£¬»¶Ó­½»Á÷£¬tengkz at gmail dot com
