@@ -19,6 +19,8 @@
 - [executor-2](https://www.cnblogs.com/jicanghai/p/9572217.html)
 - [direct_session](https://www.cnblogs.com/jicanghai/p/9589285.html)
 - [拾遗](https://www.cnblogs.com/jicanghai/p/9657367.html)
+## distributed_runtime解析
+- [all](https://www.cnblogs.com/jicanghai/p/9665689.html)
 
 # 后记
 ## 关于起源
